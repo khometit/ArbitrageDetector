@@ -1,6 +1,9 @@
+from logging import raiseExceptions
 import socket
 from fxp_bytes_subscriber import unmarshal_message, subscribe
 from bellman_ford import BellmanFord
+from math import log
+from datetime import datetime
 
 """
 This program that tracks and report on arbitrage opportunies by providng the follow:
@@ -39,14 +42,11 @@ class Lab3:
     def __init__(self, addr, prov) -> None:
         self.listener_address = addr
         self.provider_address = prov
+        self.marketLibrary = {}
+
 
     def run(self):
-        g = BellmanFord({'a': {'b': 1, 'c':5}, 'b': {'c': 2, 'a': 10}, 'c': {'a': 14, 'd': -3}, 'e': {'a': 100}})
-        g.shortest_paths('a')
-        g.add_edge(('a', 'e', -200))
-        g.shortest_paths('a')
-
-        exit(1)
+        g = BellmanFord()
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind(self.listener_address)  # subscriber binds the socket to the publishers address
@@ -57,8 +57,125 @@ class Lab3:
                 data = sock.recv(4096)
 
                 print('received {} bytes'.format(len(data)))
-                self.prt_quote(unmarshal_message(data))
 
+                #TODO: do I need to do this asynchronously?
+                self.checkArbitrage(g, data)
+
+    def checkArbitrage(self, g:BellmanFord, data:dict):
+        quotes = unmarshal_message(data)
+        self.prt_quote(quotes)
+
+        for quote in quotes:
+            #add check for time, store seen quotes in a timer tracker, 
+            self.add_market(quote)
+
+            #only accept in order messages
+            if not self.is_in_order(quote): continue
+
+            #Otherwise, store it in our Bellman algorithm
+            edge = (quote['cross1'], quote['cross2'], -1 * log(quote['price']))
+            recipEdge = (quote['cross2'], quote['cross1'], log(quote['price']))
+            g.add_edge(edge)
+            g.add_edge(recipEdge)
+
+            #FIXME: review this
+            dist, pred, neg_cycle = g.shortest_paths('USD')
+            if neg_cycle:
+                print('arbitrage', neg_cycle, pred, dist)
+                print(self.get_path(pred, neg_cycle))
+                exit(1)
+
+    def get_path(self, pred, cycle):
+        vertex = cycle[0]
+        path = list()
+        self.get_path_recur(pred, vertex, path)
+        path.append(cycle[1])
+
+        print(path)
+
+        self.print_path(path)
+
+    def get_path_recur(self, pred, vertex, path):
+        """
+        Helper function to recursively look for the predecessor of a vertice in the shortest path
+
+        :param: pred: the predecessor dictionary
+        :param: vertex: the vertex whose parent we need
+        :param: path: a memory to conveniently store the parents in order
+        """
+        #base condition
+        if pred[vertex] is None:
+            path.append(vertex)
+            return
+        
+        self.get_path_recur(pred, pred[vertex], path)
+        path.append(vertex)
+
+    def print_path(self, path):
+        PRICE = 1
+        UNITS = 100
+
+        i = 0
+        print('ARBITRAGE:\n\tstart with USD ', UNITS)
+        while(i < len(path)- 1):
+            try:
+                market = (path[i], path[i+1])
+                rate = self.marketLibrary[market][PRICE]
+                price = UNITS * rate
+                print('\n\texchange {} for {} at {} -----> {} {}'.format(market[0], market[1], rate, market[1], price))
+
+            #case when the direction is backwards
+            except KeyError as e:
+                market = (path[i+1], path[i])
+                rate = 1 / self.marketLibrary[market][PRICE]
+                price = UNITS * rate
+                print('\n\texchange {} for {} at {} -----> {} {}'.format(market[1], market[0], rate, market[0], price))
+            
+            i+=1
+
+
+    def add_market(self, quote):
+        key = (quote['cross1'], quote['cross2'])
+        time = quote['timestamp']
+        price = quote['price']
+
+        #start tracking if not in library already
+        if key not in self.marketLibrary:
+            self.marketLibrary[key] = [time, price]
+        
+    def is_in_order(self, quote):
+        TIME_KEY = 0
+        PRICE_KEY = 1
+        key = (quote['cross1'], quote['cross2'])
+        time = quote['timestamp']
+        price = quote['price']
+
+        #if already in library, make sure the quote is in order
+        if time < self.marketLibrary[key][TIME_KEY]:
+            print('Ignoring out-of-order message')
+            return False
+
+        #otherwise update
+        self.marketLibrary[key][TIME_KEY] = time
+        self.marketLibrary[key][PRICE_KEY] = price
+        return True
+
+    def is_expired(self, stamp, threshold):
+        """Helper function to check if the time has passed the threshold
+        
+        :param: peer: the peer to get time checked
+        :param: threshold: the threshold to check against
+        :return: True if timepassed is greater than threshold. False otherwise"""
+
+        timepassed = (datetime.now() - stamp).total_seconds()    #get the time delta in seconds
+        return timepassed > threshold
+
+    @staticmethod
+    def stamp():
+        """Static helper function to give the current time
+        
+        :return: current time as a Datetime object"""
+        return datetime.now() 
 
     def prt_quote(self, data: list):
         """

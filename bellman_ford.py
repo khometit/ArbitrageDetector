@@ -15,15 +15,16 @@ from turtle import distance
 
 class BellmanFord:
 
-    def __init__(self, g):
+    def __init__(self, g=None):
         """
         Constructor for BellmanFord object
 
         :param: g: the graph inititially provided by the client
         """
         self.vertices = set()    #the number of vertices stored as a set   
-        self.edges = {}   #edge storage  
-        self.buildEdge(g)
+        self.edges = {}   #edge storage
+        if g is not None: 
+            self.buildEdge(g)
     
     def buildEdge(self, g):
         """
@@ -117,7 +118,7 @@ class BellmanFord:
         for v in self.vertices:
             dist[v] = float("inf")
             pred[v] = None
-        
+
         dist[start_vertex] = 0
 
         #Run Bellman Ford algorithm to find all shortest path
@@ -129,6 +130,7 @@ class BellmanFord:
                     #Make sure both directions resolves to 0
                     if dist[v] - (dist[u] + w) > tolerance:
                         if v == start_vertex:
+                            #print('----------1. Arbitrage: {}, dist[v]: {}, dist[u]: {}'.format((u,v), dist[v], dist[u] + w))
                             return dist, pred, (u, v)
                     
                     #Update distance otherwise
@@ -141,7 +143,7 @@ class BellmanFord:
                 w = self.edges[u][v]
                 if dist[u] + w < dist[v]:
                     neg_cycle = (u, v)
-                    print('found negative cycle: ', neg_cycle)
+                    print('2. found negative cycle: ', neg_cycle)
                     return dist, pred, neg_cycle    #return the first negative cycle found
 
         return dist, pred, neg_cycle

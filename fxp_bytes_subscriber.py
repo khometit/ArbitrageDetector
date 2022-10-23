@@ -63,7 +63,7 @@ def deserialize_utcdatetime(stamp: bytes) -> datetime:
     Bytes in big-endian network format.
 
     :param stamp: 8-byte stream of a an int to be deserialized
-    :return: timestamp of the message
+    :return: timestamp of the message as a datetime object
     """
     epoch = datetime(1970, 1, 1)
     time = int.from_bytes(stamp, 'big')
