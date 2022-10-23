@@ -1,5 +1,6 @@
 import socket
 from fxp_bytes_subscriber import unmarshal_message, subscribe
+from bellman_ford import BellmanFord
 
 """
 This program that tracks and report on arbitrage opportunies by providng the follow:
@@ -40,6 +41,13 @@ class Lab3:
         self.provider_address = prov
 
     def run(self):
+        g = BellmanFord({'a': {'b': 1, 'c':5}, 'b': {'c': 2, 'a': 10}, 'c': {'a': 14, 'd': -3}, 'e': {'a': 100}})
+        g.shortest_paths('a')
+        g.add_edge(('a', 'e', -200))
+        g.shortest_paths('a')
+
+        exit(1)
+
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind(self.listener_address)  # subscriber binds the socket to the publishers address
             sent = subscribe(sock, self.listener_address, self.provider_address)
