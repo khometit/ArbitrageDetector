@@ -130,6 +130,7 @@ class BellmanFord:
                     #Make sure both directions resolves to 0
                     if dist[v] - (dist[u] + w) > tolerance:
                         if v == start_vertex:
+                            print('Found arbitrage  133')
                             #print('----------1. Arbitrage: {}, dist[v]: {}, dist[u]: {}'.format((u,v), dist[v], dist[u] + w))
                             return dist, pred, (u, v)
                     
