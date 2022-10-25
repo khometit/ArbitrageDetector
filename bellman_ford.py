@@ -10,9 +10,6 @@ Use a graph to detect an arbitrage.
 This module will return the negative cycle path to get reported on.
 """
 
-from turtle import distance
-
-
 class BellmanFord:
 
     def __init__(self, g=None):
@@ -79,7 +76,7 @@ class BellmanFord:
             print('Not a valid key. No data was removed.')
 
 
-    def shortest_paths(self, start_vertex, tolerance=0):
+    def shortest_paths(self, start_vertex, tolerance):
         """
         Find the shortest paths (sum of edge weights) from start_vertex to every other vertex.
         Also detect if there are negative cycles and report one of them.
@@ -127,10 +124,9 @@ class BellmanFord:
                 for v in self.edges[u]:
                     w = self.edges[u][v]
 
-                    #Make sure both directions resolves to 0
-                    if dist[v] - (dist[u] + w) > tolerance:
+                    if round(dist[v], 12) - round((dist[u] + w), 12) > tolerance:
                         if v == start_vertex:
-                            print('Found arbitrage  133')
+                            #print('Found arbitrage  133')
                             #print('----------1. Arbitrage: {}, dist[v]: {}, dist[u]: {}'.format((u,v), dist[v], dist[u] + w))
                             return dist, pred, (u, v)
                     
@@ -142,12 +138,9 @@ class BellmanFord:
         for u in self.edges:
             for v in self.edges[u]:
                 w = self.edges[u][v]
-                if dist[u] + w < dist[v]:
+                if round((dist[u] + w), 12) < round(dist[v], 12):
                     neg_cycle = (u, v)
                     print('2. found negative cycle: ', neg_cycle)
                     return dist, pred, neg_cycle    #return the first negative cycle found
 
-        return dist, pred, neg_cycle
-
-
-        
+        return dist, pred, neg_cycle 

@@ -1,4 +1,3 @@
-from logging import raiseExceptions
 import socket
 from fxp_bytes_subscriber import unmarshal_message, subscribe
 from bellman_ford import BellmanFord
@@ -37,10 +36,11 @@ negative cycles, just need to report whichever was discovered first.
 
 class Lab3:
 
-    SUB_EXPIRATION = 30    #10 minutes in seconds
+    SUB_EXPIRATION = 20 #* 60    #10 minutes in seconds
     VALID_DURATION = 1.5    #1.5 seconds
     SELECTOR_CHECK = 0.3
     BUF_SZ = 4096
+    TOLERENCE = 1e-15
 
     def __init__(self, addr, prov) -> None:
         self.provider_address = prov
@@ -49,6 +49,7 @@ class Lab3:
         self.selector = selectors.DefaultSelector()
         self.listener, self.listener_address = self.start_a_server()
 
+        self.foundArbitrage = False
         self.foundLoop = False
 
     def start_a_server(self):
@@ -67,8 +68,6 @@ class Lab3:
         #Registering the socket without a callback for this socket
         self.selector.register(self.listener, selectors.EVENT_READ, data=None)
 
-        #with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        #sock.bind(self.listener_address)  # subscriber binds the socket to the publishers address
         sent = subscribe(self.listener, self.listener_address, self.provider_address)
         timer = self.stamp()
 
@@ -80,8 +79,6 @@ class Lab3:
                     self.receive_msg(key.fileobj)
             
             self.check_timeouts(timer)
-
-            #data = self.listener.recv(4096)
 
 
     def receive_msg(self,sock):
@@ -98,7 +95,6 @@ class Lab3:
             print('Subscription expired. Shutting down...')
             exit(1)
 
-        #TODO: do I need to do this asynchronously?
         self.checkExpiredQuotes()
 
 
@@ -108,15 +104,18 @@ class Lab3:
 
         :param: g: the graph containing the edges
         """
-
-        #print('checking expired quotes')
         time = 0
+        removed = []
         for market in self.marketLibrary:
             #Remove quote when expired
             if self.is_expired(self.marketLibrary[market][time], self.VALID_DURATION):
                 print('removing stale quote for ({}, {})'.format(market[0], market[1]))
-                self.g.remove_edge(market[0, market[1]])
-                del self.marketLibrary[market]
+                self.g.remove_edge(market[0], market[1])
+                self.g.remove_edge(market[1], market[0])
+                removed.append(market)
+
+        for item in removed:
+            del self.marketLibrary[item]
 
 
     def checkArbitrage(self, data:dict):
@@ -146,15 +145,17 @@ class Lab3:
             self.g.add_edge(edge)
             self.g.add_edge(recipEdge)
 
-            dist, pred, neg_cycle = self.g.shortest_paths('USD', tolerance=-0)
+            dist, pred, neg_cycle = self.g.shortest_paths('USD', self.TOLERENCE)
             if neg_cycle:
                 #print('arbitrage', neg_cycle, pred, dist)
                 self.print_path(self.get_path(pred, neg_cycle))
-                #exit(1)
 
                 if self.foundLoop:
-                    print(self.g.edges)
-                    #exit(1)
+                    
+                    print('Found loop in path')
+                    print('\n\nEdges: ', self.g.edges, '\nDist: ', dist, 'Pred: ', pred)
+                    self.foundLoop = False
+                    exit(1)
 
     def get_path(self, pred, cycle):
         vertex = cycle[0]
@@ -162,7 +163,7 @@ class Lab3:
         self.get_path_recur(pred, vertex, path)
         path.append(cycle[1])
 
-        print(path)
+        #print(path)
 
         return path
 
@@ -174,9 +175,11 @@ class Lab3:
         :param: vertex: the vertex whose parent we need
         :param: path: a memory to conveniently store the parents in order
         """
-        if counter == 15:
+        if counter == 10:
             print('Inifinity loop.')
+            print('\n\nEdges: ', self.g.edges, 'Vertices: ', self.g.vertices, 'Markets: ', self.marketLibrary)
             self.foundLoop = True
+
             return
 
         #base condition
@@ -188,6 +191,8 @@ class Lab3:
         path.append(vertex)
 
     def print_path(self, path):
+        if self.foundLoop: return
+
         PRICE = 1
         units = 100
 
@@ -199,6 +204,10 @@ class Lab3:
                 rate = self.marketLibrary[market][PRICE]
                 units = units * rate
                 print('\n\texchange {} for {} at {} -----> {} {}'.format(market[0], market[1], rate, market[1], units))
+                
+                self.g.remove_edge(market[0], market[1])
+                self.g.remove_edge(market[1], market[0])
+                del self.marketLibrary[market]
 
             #case when the direction is backwards
             except KeyError as e:
@@ -206,6 +215,10 @@ class Lab3:
                 rate = 1 / self.marketLibrary[market][PRICE]
                 units = units * rate
                 print('\n\texchange {} for {} at {} -----> {} {}'.format(market[1], market[0], rate, market[0], units))
+
+                self.g.remove_edge(market[1], market[0])
+                self.g.remove_edge(market[0], market[1])
+                del self.marketLibrary[market]
             
             i+=1
 
@@ -231,28 +244,32 @@ class Lab3:
             return False
 
         #otherwise update
-        print('Updating timestamp')
-
         self.marketLibrary[key][TIME_KEY] = time
         self.marketLibrary[key][PRICE_KEY] = price
+        #Update in the graph too
+        edge = (quote['cross1'], quote['cross2'], -1 * log(price))
+        recipEdge = (quote['cross2'], quote['cross1'], log(price))
+        self.g.add_edge(edge)
+        self.g.add_edge(recipEdge)
         return True
 
-    def is_expired(self, stamp, threshold):
+    def is_expired(self, stamp, threshold, utc=False):
         """Helper function to check if the time has passed the threshold
         
         :param: peer: the peer to get time checked
         :param: threshold: the threshold to check against
         :return: True if timepassed is greater than threshold. False otherwise"""
 
-        timepassed = (datetime.now() - stamp).total_seconds()    #get the time delta in seconds
-        return timepassed > threshold
+
+        timepassed = (datetime.utcnow() - stamp).total_seconds()    #get the time delta in seconds
+        return threshold < timepassed
 
     @staticmethod
     def stamp():
         """Static helper function to give the current time
         
         :return: current time as a Datetime object"""
-        return datetime.now() 
+        return datetime.utcnow() 
 
     def prt_quotes(self, data: list):
         """

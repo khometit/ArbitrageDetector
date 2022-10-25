@@ -14,7 +14,7 @@ import fxp_bytes
 REQUEST_ADDRESS = ('localhost', 50403)
 REQUEST_SIZE = 12
 REVERSE_QUOTED = {'GBP', 'EUR', 'AUD'}
-SUBSCRIPTION_TIME = 15  # 10 * 60  # seconds
+SUBSCRIPTION_TIME =  15  # 10 * 60  # seconds
 
 class TestPublisher(object):
     """
@@ -25,7 +25,7 @@ class TestPublisher(object):
     def __init__(self):
         self.subscriptions = {}
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.reference = {'GBP': 1.25, 'JPY': 100.0, 'EUR': 1.10, 'CHF': 1.00, 'AUD': 0.75}
+        self.reference = {'GBP': 1.25, 'CHF': 1.00, 'AUD': 0.75, 'EUR': 1.10, 'JPY': 100.0} # 
     
     def register_subscription(self, subscriber):
         print('registering subscription for {}'.format(subscriber))
@@ -73,12 +73,12 @@ class TestPublisher(object):
         # perhaps take out some of the reference crosses and mix them up
         quotes = random.sample(quotes, k=len(quotes) - random.choice((0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3)))
         # occasionally put in an arbitrage
-        if random.random() < 0.30:  # 95% of the time
+        if random.random() < 0.70:  # 95% of the time
             xxx, yyy = sorted(random.sample(list(self.reference), 2))
             xxx_per_usd = self.reference[xxx] if xxx not in REVERSE_QUOTED else 1/self.reference[xxx]
             yyy_per_usd = self.reference[yyy] if yyy not in REVERSE_QUOTED else 1/self.reference[yyy]
             rate = (yyy_per_usd / xxx_per_usd) * random.gauss(1.0, 0.01)
-            if random.random() < 0.5:
+            if random.random() < 0.3:
                 print('\nputting in a 3-way cycle')
                 quotes.append({'cross': '{}/{}'.format(xxx, yyy), 'price': rate})
             else:

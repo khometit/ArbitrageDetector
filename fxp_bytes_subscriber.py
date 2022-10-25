@@ -3,7 +3,6 @@ import struct
 import ipaddress
 from array import array
 import fxp_bytes
-import socket
 
 """
 Published mesages format: 
@@ -70,6 +69,7 @@ def deserialize_utcdatetime(stamp: bytes) -> datetime:
 
     sec = time / MICROS_PER_SECOND   #convert back to seconds
     timeStamp = epoch + timedelta(seconds=sec)
+
     return timeStamp
 
 def unmarshal_message(msg: bytes) -> list:
