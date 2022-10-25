@@ -43,7 +43,14 @@ class BellmanFord:
                 self.add_edge(edge)
 
     def add_vertices(self, ver1, ver2):
-        #set will make sure there's no replicas of the same vertice
+        """
+        Helper function to add vertices into our vertices set, which will make sure there's no replicas of the same vertex
+
+        :param: ver1: vertex 1
+        :param: ver2: vertex 2
+        """
+
+        
         self.vertices.add(ver1)
         self.vertices.add(ver2)
 
@@ -118,16 +125,15 @@ class BellmanFord:
 
         dist[start_vertex] = 0
 
-        #Run Bellman Ford algorithm to find all shortest path
+        #Run Bellman Ford algorithm to find all shortest paths
         for i in range(len(self.vertices)):
             for u in self.edges:
                 for v in self.edges[u]:
                     w = self.edges[u][v]
 
+                    #Make sure both ways to/from start vertex resolve to 0, if not, there's a negative cycle
                     if round(dist[v], 12) - round((dist[u] + w), 12) > tolerance:
                         if v == start_vertex:
-                            #print('Found arbitrage  133')
-                            #print('----------1. Arbitrage: {}, dist[v]: {}, dist[u]: {}'.format((u,v), dist[v], dist[u] + w))
                             return dist, pred, (u, v)
                     
                     #Update distance otherwise

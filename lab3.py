@@ -39,7 +39,7 @@ class Lab3:
     VALID_DURATION = 1.5    #1.5 seconds
     SELECTOR_CHECK = 0.3
     BUF_SZ = 4096
-    TOLERENCE = 1e-15
+    TOLERENCE = 1e-12
 
     def __init__(self, prov) -> None:
         """
@@ -165,16 +165,19 @@ class Lab3:
             self.g.add_edge(edge)
             self.g.add_edge(recipEdge)
 
-            dist, pred, neg_cycle = self.g.shortest_paths('USD', self.TOLERENCE)
-            if neg_cycle:
-                #print('arbitrage', neg_cycle, pred, dist)
-                self.print_path(self.get_path(pred, neg_cycle))
+            for v in self.g.vertices:
+                dist, pred, neg_cycle = self.g.shortest_paths('USD', self.TOLERENCE)
+                if neg_cycle:
+                    #print('arbitrage', neg_cycle, pred, dist)
+                    self.print_path(self.get_path(pred, neg_cycle))
 
-                if self.foundLoop:
-                    print('Path found has a infinite loop')
-                    print('\n\nEdges: ', self.g.edges, '\nDist: ', dist, 'Pred: ', pred)
-                    self.foundLoop = False
-                    #exit(1)
+                    if self.foundLoop:
+                        print('Path found has a infinite loop')
+                        print('\n\nEdges: ', self.g.edges, '\nDist: ', dist, 'Pred: ', pred)
+                        self.foundLoop = False
+                        #exit(1)
+                    #Only need to report the first found negative cycle
+                    break   
 
     def get_path(self, pred, cycle):
         """
@@ -226,9 +229,10 @@ class Lab3:
 
         PRICE = 1
         units = 100
+        start = path[len(path) - 1]
 
         i = 0
-        print('ARBITRAGE:\n\tstart with USD ', units)
+        print('ARBITRAGE:\n\tstart with {} {}' .format(start, units))
         while(i < len(path)- 1):
             try:
                 market = (path[i], path[i+1])
