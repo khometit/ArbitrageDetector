@@ -14,7 +14,7 @@ import fxp_bytes
 REQUEST_ADDRESS = ('localhost', 50403)
 REQUEST_SIZE = 12
 REVERSE_QUOTED = {'GBP', 'EUR', 'AUD'}
-SUBSCRIPTION_TIME =  15  # 10 * 60  # seconds
+SUBSCRIPTION_TIME =  5 * 60  # 10 * 60  # seconds
 
 class TestPublisher(object):
     """

@@ -4,6 +4,7 @@ from bellman_ford import BellmanFord
 from math import log
 from datetime import datetime
 import selectors
+import sys
 
 """
 This program that tracks and report on arbitrage opportunies by providng the follow:
@@ -32,17 +33,20 @@ negative cycles, just need to report whichever was discovered first.
     > Can also shutdown if not receive any published message for > 1 minute.
 """
 
-#TODO: move the subscribe loop back here, only send subscribe message from subscriber 
-
 class Lab3:
 
-    SUB_EXPIRATION = 20 #* 60    #10 minutes in seconds
+    SUB_EXPIRATION =  10 * 60    #10 minutes
     VALID_DURATION = 1.5    #1.5 seconds
     SELECTOR_CHECK = 0.3
     BUF_SZ = 4096
     TOLERENCE = 1e-15
 
-    def __init__(self, addr, prov) -> None:
+    def __init__(self, prov) -> None:
+        """
+        Constructor for Lab3 class. 
+
+        :param: prov: the address of a provider in format (host, port)
+        """
         self.provider_address = prov
         self.marketLibrary = {}
 
@@ -63,6 +67,9 @@ class Lab3:
         return (sock, sock.getsockname())
 
     def run(self):
+        """
+        Starting point of the application. It registers the listening socket with selector and does timeout checks.
+        """
         self.g = BellmanFord()
 
         #Registering the socket without a callback for this socket
@@ -71,17 +78,25 @@ class Lab3:
         sent = subscribe(self.listener, self.listener_address, self.provider_address)
         timer = self.stamp()
 
-        while True:
-            events = self.selector.select(self.SELECTOR_CHECK)
-            for key, mask in events:
-                #When a peer sent me a message
-                if mask & selectors.EVENT_READ:
-                    self.receive_msg(key.fileobj)
-            
-            self.check_timeouts(timer)
+        try:
+            while True:
+                events = self.selector.select(self.SELECTOR_CHECK)
+                for key, mask in events:
+                    #When a peer sent me a message
+                    if mask & selectors.EVENT_READ:
+                        self.receive_msg(key.fileobj)
+                
+                self.check_timeouts(timer)
+        except KeyboardInterrupt as e:
+            print('\nShutting down....')
 
 
     def receive_msg(self,sock):
+        """
+        Function to receive a message. Each successfully received message will cause a check for arbitrage.
+
+        :param: sock: the socket from which to receive message
+        """
         try:
             data = sock.recv(self.BUF_SZ)
             #print(msg)
@@ -91,6 +106,11 @@ class Lab3:
             self.checkArbitrage(data)
 
     def check_timeouts(self, timer):
+        """
+        Function to check on timeouts
+
+        :param: timer: the time stamp for when subscription started
+        """
         if self.is_expired(timer, self.SUB_EXPIRATION):
             print('Subscription expired. Shutting down...')
             exit(1)
@@ -151,13 +171,20 @@ class Lab3:
                 self.print_path(self.get_path(pred, neg_cycle))
 
                 if self.foundLoop:
-                    
-                    print('Found loop in path')
+                    print('Path found has a infinite loop')
                     print('\n\nEdges: ', self.g.edges, '\nDist: ', dist, 'Pred: ', pred)
                     self.foundLoop = False
-                    exit(1)
+                    #exit(1)
 
     def get_path(self, pred, cycle):
+        """
+        Entry point for getting a path, this then calls the recursive version to get the path
+
+        :param: pred: the predecessors dictionary
+        :param: cycle: the last edge seen in the cycle, used to trace back
+        :return: the path extracted from the predecessor list
+        """
+
         vertex = cycle[0]
         path = list()
         self.get_path_recur(pred, vertex, path)
@@ -176,8 +203,7 @@ class Lab3:
         :param: path: a memory to conveniently store the parents in order
         """
         if counter == 10:
-            print('Inifinity loop.')
-            print('\n\nEdges: ', self.g.edges, 'Vertices: ', self.g.vertices, 'Markets: ', self.marketLibrary)
+            print('Infinite loop.')
             self.foundLoop = True
 
             return
@@ -191,6 +217,11 @@ class Lab3:
         path.append(vertex)
 
     def print_path(self, path):
+        """
+        Function to help print out the arbitrage and take care removing the edges
+
+        :param: path: the list containing the path that lead to an arbitrage
+        """
         if self.foundLoop: return
 
         PRICE = 1
@@ -224,6 +255,11 @@ class Lab3:
 
 
     def add_market(self, quote):
+        """
+        Function to add a quote to market library if not already existed
+
+        :param: quote: the quote to be examined 
+        """
         key = (quote['cross1'], quote['cross2'])
         time = quote['timestamp']
         price = quote['price']
@@ -233,6 +269,11 @@ class Lab3:
             self.marketLibrary[key] = [time, price]
         
     def is_in_order(self, quote):
+        """
+        Helper function to check if the quote received is in order, meaning we haven't already seen a newer quote
+
+        :param: quote: the quote to be checked
+        """
         TIME_KEY = 0
         PRICE_KEY = 1
         key = (quote['cross1'], quote['cross2'])
@@ -270,17 +311,14 @@ class Lab3:
         
         :return: current time as a Datetime object"""
         return datetime.utcnow() 
-
-    def prt_quotes(self, data: list):
-        """
-        Helper to print the quotes out with a format
-        """
-
-        for quote in data:
-            self.prt_quote(quote)
             
 
     def prt_quote(self, quote):
+        """
+        Helper function to print the quote in format
+
+        :param: quote: the quote to be printed
+        """
         time = quote['timestamp'].strftime('%Y/%m/%d %H:%M:%S.%f')
         curr = quote['cross1']
         curr += ' ' + quote['cross2']
@@ -290,27 +328,21 @@ class Lab3:
 
 if __name__ == '__main__':
     """     
-    PRICE = 9006104071832581.0
-    ser_price = fxp_bytes.serialize_price(PRICE)
-    print('price serialized: {}'.format(ser_price))
-    
-    print('price deserialized: {}'.format(deserialized_price(ser_price)))
+    Entry point for program
+    """
+    if len(sys.argv) != 3:
+        print('USAGE: python lab3.py PROVIDER_IP PROVIDER_PORT')
+        exit(1)
 
-    time = datetime.now() 
-    ser_time = fxp_bytes.serialize_utcdatetime(time)
+    try:
+        ip = sys.argv[1]
+        port = int(sys.argv[2])
+    except ValueError as e:
+        print('Invalid value for port number. Please try again.')
+        exit(1)
 
-    print('Time before formatting: {}, after: {}'.format(time, ser_time))
-    deserialize_utcdatetime(ser_time) 
-    
-    
-    b = fxp_bytes.marshal_message([{'timestamp': datetime(2006,1,2), 'cross': 'GBP/USD', 'price': 1.22041},
-                             {'timestamp': datetime(2006,1,1), 'cross': 'USD/JPY', 'price': 108.2755}])
-    print(unmarshal_message(b))
+    else:
+        SERVER_ADDRESS = (ip, port) #('localhost', 50403)
 
-    print(fxp_bytes.deserialize_address(serialize_address(('127.0.0.1', 65534))))"""
-
-    ADDRESS = ('127.0.0.1', 22222)
-    SERVER_ADDRESS = ('localhost', 50403)
-
-    lab3 = Lab3(ADDRESS, SERVER_ADDRESS)
+    lab3 = Lab3(SERVER_ADDRESS)
     lab3.run()

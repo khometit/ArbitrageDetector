@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 import struct
 import ipaddress
 from array import array
-import fxp_bytes
 
 """
 Published mesages format: 
